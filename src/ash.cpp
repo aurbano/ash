@@ -77,8 +77,11 @@ void waitForInput(){
     
     if(executeCmd(cmd, argv, handles[0], handles[1]) >= 0){
         // All done
+        std::cout << "cmd executed" << std::endl;
     }else{
         // Execution failed
+        std::cout << "ash: failed to execute" << std::endl;
+        perror("ash: failed to execute command");
     }
 }
 
@@ -96,9 +99,13 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         
         char *pathCmd;
         if(builtins::fn cmdFn = isBuiltin(cmd)){
-            int args = sizeof(argv)/sizeof(*argv);
+            int args = sizeof(argv)/sizeof(*argv)+1;
             std::cout << "Running builtin with argc=" << args << std::endl;
-            return (*cmdFn)(args, argv);
+            int res = (*cmdFn)(args, argv);
+            if(res < 0){
+                std::cerr << "ash: command failed: " << cmd << std::endl;
+            }
+            return res;
         }else if(isExecutable(cmd, &pathCmd) == 0){
             execv(pathCmd, argv);
             return 0;
