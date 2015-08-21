@@ -23,7 +23,7 @@ char **PATHDIRS = NULL;     // Each path in the PATH var
 void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
-bool isBuiltin(char *, builtin);
+builtins::fn isBuiltin(char *);
 int executeCmd(char[], char **, int, int);
 void waitForInput();
 
@@ -95,11 +95,10 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         //dup2(fd, out);  // redirect stdout
         
         char *pathCmd;
-        builtin cmdFn;
-        if(isBuiltin(cmd, cmdFn) == 0){
+        if(builtins::fn cmdFn = isBuiltin(cmd)){
             int args = sizeof(argv)/sizeof(*argv);
-            int ret = cmdFn(args, argv);
-            return 0;
+            std::cout << "Running builtin with argc=" << args << std::endl;
+            return (*cmdFn)(args, argv);
         }else if(isExecutable(cmd, &pathCmd) == 0){
             execv(pathCmd, argv);
             return 0;
@@ -120,12 +119,12 @@ int executeCmd(char cmd[], char **argv, int in, int out){
     }
 }
 
-bool isBuiltin(char *cmd, builtin path){
+builtins::fn isBuiltin(char *cmd){
     if(strcmp(cmd, "cd")==0){
-        path = cd;
-        return true;
+        std::cout << "Builtin: cd" << std::endl;
+        return builtins::cd;
     }
-    return false;
+    return 0;
 }
 
 // Return true if executable, while also writing the full path in path
