@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <stdlib.h>
+#include <cstdio>
+#include "builtins.h"
 #ifdef WINDOWS
     #include <direct.h>
     #define GetCurrentDir _getcwd
@@ -13,13 +15,15 @@
     #define GetCurrentDir getcwd
 #endif
 
-char PWD[FILENAME_MAX];     // Current working directory
+char PWD[FILENAME_MAX];
+const int BUFFERSIZE = 1024;// Read buffer size
 char *PATH;                 // PATH environmental variable
 char **PATHDIRS = NULL;     // Each path in the PATH var
 
 void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
+bool isBuiltin(char *, builtin);
 int executeCmd(char[], char **, int, int);
 void waitForInput();
 
@@ -42,10 +46,10 @@ void waitForInput(){
     std::cout << PWD << " $ ";
     
     // Input buffer
-    char cmd[1024];
+    char cmd[BUFFERSIZE];
     
     // Read the command
-    std::cin >> cmd;
+    std::cin.getline(cmd, BUFFERSIZE);
     
     // IO, default to stdin, stdout
     int handles[2];
@@ -54,8 +58,10 @@ void waitForInput(){
     
     // Get command and arguments
     std::vector<char*> args;
+    // Split by space
     char* prog = strtok( cmd, " " );
     char* tmp = prog;
+    // Iterate over the args and add them to args
     while ( tmp != NULL ){
         args.push_back( tmp );
         tmp = strtok( NULL, " " );
@@ -71,6 +77,8 @@ void waitForInput(){
     
     if(executeCmd(cmd, argv, handles[0], handles[1]) >= 0){
         // All done
+    }else{
+        // Execution failed
     }
 }
 
@@ -79,7 +87,7 @@ int executeCmd(char cmd[], char **argv, int in, int out){
     pid_t kidpid = fork();
     
     if ( kidpid < 0 ){ // Error
-        perror( "Internal error: cannot fork." );
+        perror( "ash: internal error: cannot fork child process." );
         return -1;
     }else if ( kidpid == 0 ){ // Child
         // Redirect output
@@ -87,27 +95,37 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         //dup2(fd, out);  // redirect stdout
         
         char *pathCmd;
-        if(isExecutable(cmd, &pathCmd) == 0){
-            std::cout << "Executing " << pathCmd << std::endl;
+        builtin cmdFn;
+        if(isBuiltin(cmd, cmdFn) == 0){
+            int args = sizeof(argv)/sizeof(*argv);
+            int ret = cmdFn(args, argv);
+            return 0;
+        }else if(isExecutable(cmd, &pathCmd) == 0){
             execv(pathCmd, argv);
             return 0;
-            
         }else{
             std::cerr << "ash: command not found: " << cmd << std::endl;
             return -1;
         }
     }else{ // Parent
         int kidStatus;
-        pid_t waitp = waitpid(kidpid, &kidStatus,0); // 0 means blocking
+        waitpid(kidpid, &kidStatus,0); // 0 means blocking
         // I am the parent.  Wait for the child.
-        if (waitp < 0 ){
-            std::cerr <<  "Internal error: wait for child failed [status = " << kidStatus << "]" << std::endl;
+        if (kidStatus < 0 ){
+            std::cerr <<  "ash: last command errored (status " << kidStatus << ")" << std::endl;
             return -1;
         }
-        std::cout << "Parent: child exited with status: " << kidStatus << std::endl;
         // All done
         return 0;
     }
+}
+
+bool isBuiltin(char *cmd, builtin path){
+    if(strcmp(cmd, "cd")==0){
+        path = cd;
+        return true;
+    }
+    return false;
 }
 
 // Return true if executable, while also writing the full path in path
