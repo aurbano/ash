@@ -1,7 +1,6 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
-#include "parse.h"
 #include <stdio.h>
 #include <sys/types.h>
 #ifdef WINDOWS
