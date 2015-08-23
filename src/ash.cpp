@@ -63,6 +63,24 @@ void waitForInput(){
 
     // Get command and arguments
     std::vector<char*> args;
+    {
+        bool inArgs = false;
+        char eachArg[BUFFERSIZE];
+        for(int i=0; cmd[i]; i++){
+            // Walk the cmd splitting the args
+            if(!inArgs && cmd[i]==' '){
+                inArgs = true;
+            }else if(!inArgs){
+                continue;
+            }
+            // Now we are in the args section
+            switch(cmd[i]){
+                case ' ':
+                    // Finish arg
+                    
+            }
+        }
+    }
     // Split by space
     char* prog = strtok( cmd, " " );
     char* tmp = prog;
@@ -79,6 +97,27 @@ void waitForInput(){
     }
 
     argv[args.size()] = NULL;
+
+    // Check args for variables/quotes/stuff like that
+    bool inDoubleQuotes = false;
+    bool inSingleQuotes = false;
+    bool inBackQuotes = false;
+    for(int i=1; argv[i]; i++){
+        int c=0;
+        char* var;
+        while(argv[i][c]!='\0'){
+            // Parse each character looking for special input
+            switch(argv[i][c]){
+                case '\\':
+                    // Ignore the next char
+                    c++;
+                    break;
+                case '$':
+                    // From the next char on, it's a variable, it has to be replaced
+                    
+            }
+        }
+    }
 
     if(executeCmd(cmd, argv, handles[0], handles[1]) < 0){
         // Execution failed
