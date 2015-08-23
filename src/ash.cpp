@@ -93,6 +93,10 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         int args = sizeof(argv)/sizeof(*argv)+1;
         int res = (*cmdFn)(args, argv);
         if(res < 0){
+            if(res == -100){
+                // Request shell termination
+                exit(0);
+            }
             std::cerr << "ash: command failed: " << cmd << std::endl;
         }
         return res;
@@ -135,6 +139,10 @@ int executeCmd(char cmd[], char **argv, int in, int out){
 builtins::fn isBuiltin(char *cmd){
     if(strcmp(cmd, "cd")==0){
         return builtins::cd;
+    }else if(strcmp(cmd, "echo")==0){
+        return builtins::echo;
+    }else if(strcmp(cmd, "exit")==0){
+        return builtins::exit;
     }
     return 0;
 }
