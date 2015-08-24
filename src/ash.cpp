@@ -61,29 +61,38 @@ void waitForInput(){
     handles[0] = 0;
     handles[1] = 1;
 
-    // Get command and arguments
-    std::vector<char*> args;
-    // Split by space
-    char* prog = strtok( cmd, " " );
-    char* tmp = prog;
-    // Iterate over the args and add them to args
-    while ( tmp != NULL ){
-        args.push_back( tmp );
-        tmp = strtok( NULL, " " );
-    }
+    // Split by ;
+    char* eachCmd = strtok(cmd, ";");
+    // Tmp storage for it
+    char* eachCmdTmp = eachCmd;
+    // Run each command
+    while(eachCmdTmp != NULL){
+        std::cout << "Running: " << eachCmdTmp << std::endl;
+        // Get command and arguments
+        std::vector<char*> args;
+        // Split by space
+        char* prog = strtok( eachCmdTmp, " " );
+        char* tmp = prog;
+        // Iterate over the args and add them to args
+        while ( tmp != NULL ){
+            args.push_back( tmp );
+            tmp = strtok( NULL, " " );
+        }
 
-    // Build argv
-    char** argv = new char*[args.size()+1];
-    for ( int k = 0; k < args.size(); k++ ){
-        argv[k] = args[k];
-    }
+        // Build argv
+        char** argv = new char*[args.size()+1];
+        for ( int k = 0; k < args.size(); k++ ){
+            argv[k] = args[k];
+        }
 
-    argv[args.size()] = NULL;
+        argv[args.size()] = NULL;
 
-    if(executeCmd(cmd, argv, handles[0], handles[1]) < 0){
-        // Execution failed
-        std::cout << "ash: failed to execute" << std::endl;
-        perror("ash: failed to execute command");
+        if(executeCmd(cmd, argv, handles[0], handles[1]) < 0){
+            // Execution failed
+            std::cout << "ash: failed to execute" << std::endl;
+            perror("ash: failed to execute command");
+        }    
+        eachCmdTmp = strtok(NULL, ";");
     }
 }
 
