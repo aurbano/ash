@@ -62,21 +62,20 @@ void waitForInput(){
     handles[1] = 1;
 
     // Split by ;
-    char* eachCmd = strtok(cmd, ";");
-    // Tmp storage for it
-    char* eachCmdTmp = eachCmd;
+    char* eachCmdPtr;
+    char* eachCmd = strtok_r(cmd, ";", &eachCmdPtr);
     // Run each command
-    while(eachCmdTmp != NULL){
-        std::cout << "Running: " << eachCmdTmp << std::endl;
+    while(eachCmd != NULL){
         // Get command and arguments
         std::vector<char*> args;
         // Split by space
-        char* prog = strtok( eachCmdTmp, " " );
+        char* tmpPtr;
+        char* prog = strtok_r( eachCmd, " " , &tmpPtr);
         char* tmp = prog;
         // Iterate over the args and add them to args
         while ( tmp != NULL ){
             args.push_back( tmp );
-            tmp = strtok( NULL, " " );
+            tmp = strtok_r( NULL, " " , &tmpPtr);
         }
 
         // Build argv
@@ -92,7 +91,7 @@ void waitForInput(){
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
         }    
-        eachCmdTmp = strtok(NULL, ";");
+        eachCmd = strtok_r(NULL, ";", &eachCmdPtr);
     }
 }
 
