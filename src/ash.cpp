@@ -20,13 +20,15 @@ char PWD[FILENAME_MAX];
 const int BUFFERSIZE = 1024;// Read buffer size
 char *PATH;                 // PATH environmental variable
 char **PATHDIRS = NULL;     // Each path in the PATH var
+const int PIPE_READ = 0;
+const int PIPE_WRITE = 1;
 
 char* getWorkingDir();
 void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
-int executeCmd(char[], char **, int[], int[]);
+int executeCmd(char[], char **, int[], int[], bool);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
@@ -57,10 +59,15 @@ void waitForInput(){
     // Read the command
     std::cin.getline(cmd, BUFFERSIZE);
 
+    // Prepare the in/out containers
+    std::vector<int*> pipes; 
+
     // Split by ;
     char* eachCmdPtr;
     char* cmdCopy = strdup(cmd);
     char* eachCmd = strtok_r(cmd, ";|", &eachCmdPtr);
+    bool isPiped = false;
+    bool wait = true;
     // Run each command
     while(eachCmd != NULL){
         // Get the separator used
@@ -69,18 +76,23 @@ void waitForInput(){
         util::strtrim(eachCmd);
 
         // IO, default to stdin, stdout
-        int inputHandles[2];
-        int outputHandles[2];
+        int fdIn[2]; // file descriptor holder for this process
+        int fdOut[2]; // file descriptor holder for this process
 
-        // If sep was pipe, redirect in/ou
+        if(isPiped && !pipes.empty()){
+            fdIn = pipes.back();
+        }
+
+        // Set isPiped for the next command in the execution flow
         if(sep == '|'){
-            pipe(inputHandles);
-            pipe(outputHandles);
+            isPiped = true;
+            wait = false;
+            pipe(fdOut);
+            // Store the current pipes
+            pipes.push_back(fdOut);
         }else{
-            inputHandles[0] = 0;
-            inputHandles[1] = 1;
-            outputHandles[0] = 0;
-            outputHandles[1] = 1;
+            isPiped = false;
+            wait = true;
         }
 
         // Get command and arguments
@@ -105,7 +117,7 @@ void waitForInput(){
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(eachCmd, argv, inputHandles, outputHandles) < 0){
+        if(executeCmd(eachCmd, argv, fdIn, fdOut, wait) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
@@ -114,7 +126,7 @@ void waitForInput(){
     }
 }
 
-int executeCmd(char cmd[], char **argv, int inputHandles[2], int outputHandles[2]){
+int executeCmd(char cmd[], char **argv, int pipeIn[2], int pipeOut[2], bool wait){
     // Check if its a builtin
     if(builtins::fn cmdFn = isBuiltin(cmd)){
         int args = sizeof(argv)/sizeof(*argv)+1;
@@ -133,22 +145,23 @@ int executeCmd(char cmd[], char **argv, int inputHandles[2], int outputHandles[2
     pid_t kidpid = fork();
 
     if ( kidpid < 0 ){ // Error
-        perror( "ash: internal error: cannot fork child process." );
+        perror( "ash: internal error: cannot fork child process.");
         return -1;
     }else if ( kidpid == 0 ){ // Child
-        // Redirect output
-        if (dup2(inputHandles[0], 0) != 0 ||
-            close(inputHandles[0]) != 0 ||
-            close(inputHandles[1]) != 0){
-            std::cerr << "ash: failed to set up standard input\n";
+        // Redirect input
+        if (dup2(fdIn[PIPE_READ], 0) != 0){
+            std::cerr << "ash: failed to set up standard input." << std::endl;
             exit(-1);
         }
-        // Redirect input
-        if (dup2(outputHandles[1], 1) != 1 ||
-            close(outputHandles[1]) != 0 ||
-            close(outputHandles[0]) != 0){
-            std::cerr << "ash: failed to set up standard output\n";
+
+        // Redirect output
+        if (dup2(fd[PIPE_WRITE], 1) != 0){
+            std::cerr << "ash: failed to set up standard output." << std::endl;
             exit(-1);
+        }
+
+        if(close(fd[PIPE_READ]) != 0 || close(fd[PIPE_WRITE]) != 0){
+            std::cerr << "ash: failed to close in/out streams." << std::endl;
         }
 
         char *pathCmd;
@@ -160,14 +173,19 @@ int executeCmd(char cmd[], char **argv, int inputHandles[2], int outputHandles[2
             exit(-1);
         }
     }else{ // Parent
+        // Close the pipes
+        close(fd[PIPE_READ]);
+        close(fd[PIPE_WRITE]);
         int kidStatus;
         int wpid;
-        // Wait for all children (useful is command creates children itself)
-        while ((wpid = wait(&kidStatus)) > 0);
-        // I am the parent.  Wait for the child.
-        if (kidStatus < 0 ){
-            std::cerr <<  "ash: last command errored (status " << kidStatus << ")" << std::endl;
-            return -1;
+        if(wait){
+            // Wait for all children (useful is command creates children itself)
+            while ((wpid = wait(&kidStatus)) > 0);
+            // I am the parent.  Wait for the child.
+            if (kidStatus < 0 ){
+                std::cerr <<  "ash: last command errored (status " << kidStatus << ")" << std::endl;
+                return -1;
+            }
         }
         // All done
         return 0;
