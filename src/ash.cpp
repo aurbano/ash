@@ -26,7 +26,7 @@ void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
-int executeCmd(char[], char **, int, int);
+int executeCmd(char[], char **, int[], int[]);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
@@ -57,23 +57,40 @@ void waitForInput(){
     // Read the command
     std::cin.getline(cmd, BUFFERSIZE);
 
-    // IO, default to stdin, stdout
-    int handles[2];
-    handles[0] = 0;
-    handles[1] = 1;
-
     // Split by ;
     char* eachCmdPtr;
-    char* eachCmd = strtok_r(cmd, ";", &eachCmdPtr);
+    char* cmdCopy = strdup(cmd);
+    char* eachCmd = strtok_r(cmd, ";|", &eachCmdPtr);
     // Run each command
     while(eachCmd != NULL){
+        // Get the separator used
+        char sep = cmdCopy[eachCmd-cmd+strlen(eachCmd)];
+
         util::strtrim(eachCmd);
+
+        // IO, default to stdin, stdout
+        int inputHandles[2];
+        int outputHandles[2];
+
+        // If sep was pipe, redirect in/ou
+        if(sep == '|'){
+            pipe(inputHandles);
+            pipe(outputHandles);
+        }else{
+            inputHandles[0] = 0;
+            inputHandles[1] = 1;
+            outputHandles[0] = 0;
+            outputHandles[1] = 1;
+        }
+
         // Get command and arguments
         std::vector<char*> args;
+
         // Split by space
         char* tmpPtr;
         char* prog = strtok_r( eachCmd, " " , &tmpPtr);
         char* tmp = prog;
+
         // Iterate over the args and add them to args
         while ( tmp != NULL ){
             args.push_back( tmp );
@@ -88,7 +105,7 @@ void waitForInput(){
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(eachCmd, argv, handles[0], handles[1]) < 0){
+        if(executeCmd(eachCmd, argv, inputHandles, outputHandles) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
@@ -97,7 +114,7 @@ void waitForInput(){
     }
 }
 
-int executeCmd(char cmd[], char **argv, int in, int out){
+int executeCmd(char cmd[], char **argv, int inputHandles[2], int outputHandles[2]){
     // Check if its a builtin
     if(builtins::fn cmdFn = isBuiltin(cmd)){
         int args = sizeof(argv)/sizeof(*argv)+1;
@@ -120,8 +137,19 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         return -1;
     }else if ( kidpid == 0 ){ // Child
         // Redirect output
-        //int fd = open("/dev/ttyS0", O_WRONLY);
-        //dup2(fd, out);  // redirect stdout
+        if (dup2(inputHandles[0], 0) != 0 ||
+            close(inputHandles[0]) != 0 ||
+            close(inputHandles[1]) != 0){
+            std::cerr << "ash: failed to set up standard input\n";
+            exit(-1);
+        }
+        // Redirect input
+        if (dup2(outputHandles[1], 1) != 1 ||
+            close(outputHandles[1]) != 0 ||
+            close(outputHandles[0]) != 0){
+            std::cerr << "ash: failed to set up standard output\n";
+            exit(-1);
+        }
 
         char *pathCmd;
         if(isExecutable(cmd, &pathCmd) == 0){
