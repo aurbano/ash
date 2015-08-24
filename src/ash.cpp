@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <cstdio>
 #include "builtins.h"
+#include "util.h"
 #ifdef WINDOWS
 #include <direct.h>
 #define GetCurrentDir _getcwd
@@ -66,6 +67,7 @@ void waitForInput(){
     char* eachCmd = strtok_r(cmd, ";", &eachCmdPtr);
     // Run each command
     while(eachCmd != NULL){
+        util::strtrim(eachCmd);
         // Get command and arguments
         std::vector<char*> args;
         // Split by space
@@ -86,7 +88,7 @@ void waitForInput(){
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(cmd, argv, handles[0], handles[1]) < 0){
+        if(executeCmd(eachCmd, argv, handles[0], handles[1]) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");

@@ -1,2 +1,2 @@
 all:
-	g++ -I src/includes/ src/builtins/* src/ash.cpp -o ash
+	g++ -I src/includes/ src/builtins/* src/utils/* src/ash.cpp -o ash
