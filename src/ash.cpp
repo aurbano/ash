@@ -103,8 +103,8 @@ int executeCmd(char cmd[], char **argv, int in, int out){
         int args = sizeof(argv)/sizeof(*argv)+1;
         int res = (*cmdFn)(args, argv);
         if(res < 0){
-            if(res == -100){
-                // Request shell termination
+            if(res == EXIT_CODE){
+                // Request shell termination, because -100 is used internally for that
                 exit(0);
             }
             std::cerr << "ash: command failed: " << cmd << std::endl;
