@@ -133,13 +133,18 @@ void waitForInput(){
 }
 
 int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPiped, bool isPiped, bool shouldWait){
+    // Number of args
+    int args = 0;
+    for(int i=0;argv[i];i++){
+        args++;
+    }
     // Check if its a builtin
     if(builtins::fn cmdFn = isBuiltin(cmd)){
-        int args = sizeof(argv)/sizeof(*argv)+1;
         int res = (*cmdFn)(args, argv);
         if(res < 0){
             if(res == EXIT_CODE){
-                // Request shell termination, because -100 is used internally for that
+                // If a builtin returns EXIT_CODE, exit
+                // this is used in the exit builtin for example
                 exit(EXIT_SUCCESS);
             }
             std::cerr << "ash: command failed: " << cmd << std::endl;
@@ -169,6 +174,14 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
             close(lastPipe[OUTPUT]);
             // Redirect input to read of pipe
             dup2(lastPipe[INPUT], INPUT);
+        }
+
+        // Check if the last argument is a file redirection command
+        if(args-1 > 0 && argv[args-2][0] == '>'){
+            const char* outFile = argv[args-1];
+            argv[args-1] = 0;
+            argv[args-2] = 0;
+            freopen(outFile,"w",stdout);
         }
 
         char *pathCmd;
