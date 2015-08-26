@@ -13,6 +13,8 @@ Pretty much everything is still waiting to be done, mainly:
 * Signal handling (Only Ctrl+C (SIGINT) supported)
 * More builtins (alias, declare, let, local, logout... )
 * File redirection
+    * <del>output redirection</del> Redirecting output with > works.
+    * input redirection: reading a file into stdin
 * Variable expansion
 * Colors :)
 
