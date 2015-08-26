@@ -25,6 +25,7 @@ const int PIPE_WRITE = 1;
 
 char* getWorkingDir();
 void updatePath();
+void signalHandler(int);
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
@@ -34,11 +35,17 @@ void waitForInput();
 int main(int argc, const char * argv[]) {
 
     std::cout << "Welcome to the ash shell!!\n";
+    
+    // Capture signals
+    signal(SIGINT, signalHandler);
+    signal(SIGQUIT,signalHandler);
+    signal(SIGTERM, signalHandler);
 
+    // Start main loop
     while (1) {
         waitForInput();
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 char* getWorkingDir(){
@@ -133,7 +140,7 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
         if(res < 0){
             if(res == EXIT_CODE){
                 // Request shell termination, because -100 is used internally for that
-                exit(0);
+                exit(EXIT_SUCCESS);
             }
             std::cerr << "ash: command failed: " << cmd << std::endl;
         }
@@ -168,9 +175,9 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
         }
         
         char *pathCmd;
-        if(isExecutable(cmd, &pathCmd) == 0){
+        if(isExecutable(cmd, &pathCmd) == EXIT_SUCCESS){
             execv(pathCmd, argv);
-            exit(0);
+            exit(EXIT_SUCCESS);
         }else{
             std::cerr << "ash: command not found: " << cmd << std::endl;
             exit(-1);
@@ -193,7 +200,7 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
             }
         }
         // All done
-        return 0;
+        return EXIT_SUCCESS;
     }
 }
 
@@ -248,6 +255,20 @@ bool isExecutable(char *cmd, char **path){
         }
 
         return -1;
+    }
+}
+
+void signalHandler(int signum){
+    switch(signum){
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            std::cout << std::endl;
+            builtins::exit(0,0);
+            exit(EXIT_SUCCESS);
+            break;
+        default:
+            exit(signum);
     }
 }
 
