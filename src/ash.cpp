@@ -28,7 +28,7 @@ void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
-int executeCmd(char[], char **, int[], int[], bool, bool);
+int executeCmd(char[], char **, int[], int[], bool, bool, bool);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
@@ -67,6 +67,7 @@ void waitForInput(){
     char* cmdCopy = strdup(cmd);
     char* eachCmd = strtok_r(cmd, ";|", &eachCmdPtr);
     int lastFd[2];
+    bool wasPiped = false;
     bool isPiped = false;
     bool shouldWait = true;
     // Run each command
@@ -78,11 +79,11 @@ void waitForInput(){
 
         // IO, default to stdin, stdout
         int fd[2]; // file descriptor holder for this process
-
+        pipe(fd);  // make them into pipes
+        
         if(sep == '|'){
             isPiped = true;
             shouldWait = false;
-            pipe(fd);
         }else{
             isPiped = false;
             shouldWait = true;
@@ -110,7 +111,7 @@ void waitForInput(){
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(eachCmd, argv, fd, lastFd, isPiped, shouldWait) < 0){
+        if(executeCmd(eachCmd, argv, fd, lastFd, wasPiped, isPiped, shouldWait) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
@@ -120,11 +121,11 @@ void waitForInput(){
         // Store the descriptors for the next iteration
         lastFd[PIPE_READ] = fd[PIPE_READ];
         lastFd[PIPE_WRITE] = fd[PIPE_WRITE];
+        wasPiped = isPiped;
     }
 }
 
-int executeCmd(char cmd[], char **argv, int pipe[2], int lastPipe[2], bool isPiped, bool shouldWait){
-
+int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPiped, bool isPiped, bool shouldWait){
     // Check if its a builtin
     if(builtins::fn cmdFn = isBuiltin(cmd)){
         int args = sizeof(argv)/sizeof(*argv)+1;
@@ -146,16 +147,26 @@ int executeCmd(char cmd[], char **argv, int pipe[2], int lastPipe[2], bool isPip
         perror( "ash: internal error: cannot fork child process.");
         return -1;
     }else if ( kidpid == 0 ){ // Child
-        // In/Out redir
-        dup2(pipe[PIPE_READ], PIPE_READ);
-        dup2(pipe[PIPE_WRITE], PIPE_WRITE);
-
-        // Piping
         if(isPiped){
-            // Redirect the output from the last, to the input of the current
-            dup2(pipe[PIPE_READ], lastPipe[PIPE_WRITE]);
+            // Process 1 of a pipe
+            close(PIPE_WRITE);
+            if(!wasPiped){
+                close(fd[PIPE_READ]);
+            }
+            // Redirect stdout into out end of pipe
+            dup2(fd[PIPE_WRITE], PIPE_WRITE);
         }
 
+        if(wasPiped){
+            // Process 2 of a pipe chain
+            close(PIPE_READ);
+            if(!isPiped){
+                close(lastPipe[PIPE_WRITE]);
+            }
+            // Redirect input to read end of pipe
+            dup2(lastPipe[PIPE_READ], PIPE_READ);
+        }
+        
         char *pathCmd;
         if(isExecutable(cmd, &pathCmd) == 0){
             execv(pathCmd, argv);
@@ -166,6 +177,11 @@ int executeCmd(char cmd[], char **argv, int pipe[2], int lastPipe[2], bool isPip
         }
     }else{ // Parent
         // Close the pipes
+        if(wasPiped){
+            close(lastPipe[PIPE_READ]);
+            close(lastPipe[PIPE_WRITE]);
+        }
+
         int kidStatus;
         if(shouldWait){
             // Wait for all children (useful is command creates children itself)
