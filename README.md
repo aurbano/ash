@@ -10,7 +10,7 @@ mostly to learn more about Unix and C++.
 Pretty much everything is still waiting to be done, mainly:
 
 * More builtins (alias, declare, let, local, logout... )
-* Piping
+* <del>Piping</del> You can now pipe commands!! :D
 * File redirection
 * Variable expansion
 * Colors :)
