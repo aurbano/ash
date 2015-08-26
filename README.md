@@ -9,8 +9,9 @@ mostly to learn more about Unix and C++.
 ## Roadmap
 Pretty much everything is still waiting to be done, mainly:
 
-* More builtins (alias, declare, let, local, logout... )
 * <del>Piping</del> You can now pipe commands!! :D
+* Signal handling (Only Ctrl+C (SIGINT) supported)
+* More builtins (alias, declare, let, local, logout... )
 * File redirection
 * Variable expansion
 * Colors :)
