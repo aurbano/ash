@@ -20,8 +20,8 @@ char PWD[FILENAME_MAX];
 const int BUFFERSIZE = 1024;// Read buffer size
 char *PATH;                 // PATH environmental variable
 char **PATHDIRS = NULL;     // Each path in the PATH var
-const int PIPE_READ = 0;
-const int PIPE_WRITE = 1;
+const int INPUT = 0;
+const int OUTPUT = 1;
 
 char* getWorkingDir();
 void updatePath();
@@ -123,11 +123,11 @@ void waitForInput(){
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
         }    
-        eachCmd = strtok_r(NULL, ";", &eachCmdPtr);
+        eachCmd = strtok_r(NULL, ";|", &eachCmdPtr);
 
         // Store the descriptors for the next iteration
-        lastFd[PIPE_READ] = fd[PIPE_READ];
-        lastFd[PIPE_WRITE] = fd[PIPE_WRITE];
+        lastFd[INPUT] = fd[INPUT];
+        lastFd[OUTPUT] = fd[OUTPUT];
         wasPiped = isPiped;
     }
 }
@@ -156,24 +156,21 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
     }else if ( kidpid == 0 ){ // Child
         if(isPiped){
             // Process 1 of a pipe
-            close(PIPE_WRITE);
-            if(!wasPiped){
-                close(fd[PIPE_READ]);
-            }
-            // Redirect stdout into out end of pipe
-            dup2(fd[PIPE_WRITE], PIPE_WRITE);
+            close(OUTPUT);
+            close(fd[INPUT]);
+            // Redirect stdout into write of pipe
+            dup2(fd[OUTPUT], OUTPUT);
         }
 
         if(wasPiped){
-            // Process 2 of a pipe chain
-            close(PIPE_READ);
-            if(!isPiped){
-                close(lastPipe[PIPE_WRITE]);
-            }
-            // Redirect input to read end of pipe
-            dup2(lastPipe[PIPE_READ], PIPE_READ);
+            // Process 2 of a pipe
+            close(INPUT);
+            close(fd[OUTPUT]);
+            close(lastPipe[OUTPUT]);
+            // Redirect input to read of pipe
+            dup2(lastPipe[INPUT], INPUT);
         }
-        
+
         char *pathCmd;
         if(isExecutable(cmd, &pathCmd) == EXIT_SUCCESS){
             execv(pathCmd, argv);
@@ -185,8 +182,8 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
     }else{ // Parent
         // Close the pipes
         if(wasPiped){
-            close(lastPipe[PIPE_READ]);
-            close(lastPipe[PIPE_WRITE]);
+            close(lastPipe[INPUT]);
+            close(lastPipe[OUTPUT]);
         }
 
         int kidStatus;
