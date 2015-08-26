@@ -101,12 +101,25 @@ void waitForInput(){
 
         // Split by space
         char* tmpPtr;
-        char* prog = strtok_r( eachCmd, " " , &tmpPtr);
+        char* progCpy = strdup(eachCmd);
+        char* prog = strtok_r( eachCmd, " <>" , &tmpPtr);
         char* tmp = prog;
+        char* argSep;
 
         // Iterate over the args and add them to args
         while ( tmp != NULL ){
             args.push_back( tmp );
+            // Check which separator triggered this
+            int sepIndex = tmp - eachCmd + strlen(tmp);
+            char argSep = progCpy[tmp-eachCmd+strlen(tmp)];
+            // If it was not a space, we add the separator as an argument
+            // it will be parsed later
+            if(sepIndex < strlen(progCpy) && progCpy[sepIndex] != ' '){
+                char argSep[2];
+                argSep[0] = progCpy[sepIndex];
+                argSep[1] = '\0';
+                args.push_back(argSep);
+            }
             tmp = strtok_r( NULL, " " , &tmpPtr);
         }
 
