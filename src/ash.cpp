@@ -28,7 +28,7 @@ void updatePath();
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
-int executeCmd(char[], char **, int[], int[], bool);
+int executeCmd(char[], char **, int[], int[], bool, bool);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
@@ -66,8 +66,9 @@ void waitForInput(){
     char* eachCmdPtr;
     char* cmdCopy = strdup(cmd);
     char* eachCmd = strtok_r(cmd, ";|", &eachCmdPtr);
+    int lastFd[2];
     bool isPiped = false;
-    bool wait = true;
+    bool shouldWait = true;
     // Run each command
     while(eachCmd != NULL){
         // Get the separator used
@@ -76,23 +77,15 @@ void waitForInput(){
         util::strtrim(eachCmd);
 
         // IO, default to stdin, stdout
-        int fdIn[2]; // file descriptor holder for this process
-        int fdOut[2]; // file descriptor holder for this process
+        int fd[2]; // file descriptor holder for this process
 
-        if(isPiped && !pipes.empty()){
-            fdIn = pipes.back();
-        }
-
-        // Set isPiped for the next command in the execution flow
         if(sep == '|'){
             isPiped = true;
-            wait = false;
-            pipe(fdOut);
-            // Store the current pipes
-            pipes.push_back(fdOut);
+            shouldWait = false;
+            pipe(fd);
         }else{
             isPiped = false;
-            wait = true;
+            shouldWait = true;
         }
 
         // Get command and arguments
@@ -117,16 +110,21 @@ void waitForInput(){
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(eachCmd, argv, fdIn, fdOut, wait) < 0){
+        if(executeCmd(eachCmd, argv, fd, lastFd, isPiped, shouldWait) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
         }    
         eachCmd = strtok_r(NULL, ";", &eachCmdPtr);
+
+        // Store the descriptors for the next iteration
+        lastFd[PIPE_READ] = fd[PIPE_READ];
+        lastFd[PIPE_WRITE] = fd[PIPE_WRITE];
     }
 }
 
-int executeCmd(char cmd[], char **argv, int pipeIn[2], int pipeOut[2], bool wait){
+int executeCmd(char cmd[], char **argv, int pipe[2], int lastPipe[2], bool isPiped, bool shouldWait){
+
     // Check if its a builtin
     if(builtins::fn cmdFn = isBuiltin(cmd)){
         int args = sizeof(argv)/sizeof(*argv)+1;
@@ -148,20 +146,14 @@ int executeCmd(char cmd[], char **argv, int pipeIn[2], int pipeOut[2], bool wait
         perror( "ash: internal error: cannot fork child process.");
         return -1;
     }else if ( kidpid == 0 ){ // Child
-        // Redirect input
-        if (dup2(fdIn[PIPE_READ], 0) != 0){
-            std::cerr << "ash: failed to set up standard input." << std::endl;
-            exit(-1);
-        }
+        // In/Out redir
+        dup2(pipe[PIPE_READ], PIPE_READ);
+        dup2(pipe[PIPE_WRITE], PIPE_WRITE);
 
-        // Redirect output
-        if (dup2(fd[PIPE_WRITE], 1) != 0){
-            std::cerr << "ash: failed to set up standard output." << std::endl;
-            exit(-1);
-        }
-
-        if(close(fd[PIPE_READ]) != 0 || close(fd[PIPE_WRITE]) != 0){
-            std::cerr << "ash: failed to close in/out streams." << std::endl;
+        // Piping
+        if(isPiped){
+            // Redirect the output from the last, to the input of the current
+            dup2(pipe[PIPE_READ], lastPipe[PIPE_WRITE]);
         }
 
         char *pathCmd;
@@ -174,13 +166,10 @@ int executeCmd(char cmd[], char **argv, int pipeIn[2], int pipeOut[2], bool wait
         }
     }else{ // Parent
         // Close the pipes
-        close(fd[PIPE_READ]);
-        close(fd[PIPE_WRITE]);
         int kidStatus;
-        int wpid;
-        if(wait){
+        if(shouldWait){
             // Wait for all children (useful is command creates children itself)
-            while ((wpid = wait(&kidStatus)) > 0);
+            while (wait(&kidStatus) > 0);
             // I am the parent.  Wait for the child.
             if (kidStatus < 0 ){
                 std::cerr <<  "ash: last command errored (status " << kidStatus << ")" << std::endl;
