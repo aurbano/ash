@@ -23,13 +23,22 @@ char **PATHDIRS = NULL;     // Each path in the PATH var
 const int INPUT = 0;
 const int OUTPUT = 1;
 
+// Command structure
+struct command{
+    char* exe;
+    int args;
+    char** argv;
+    char fileOut[FILENAME_MAX];
+    char fileIn[FILENAME_MAX];
+};
+
 char* getWorkingDir();
 void updatePath();
 void signalHandler(int);
 void parsePathDirs();
 bool isExecutable(char *, char **);
 builtins::fn isBuiltin(char *);
-int executeCmd(char[], char **, int[], int[], bool, bool, bool);
+int executeCmd(command, int[], int[], bool, bool, bool);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
@@ -60,27 +69,32 @@ char* getWorkingDir(){
 void waitForInput(){
     std::cout << getWorkingDir() << " $ ";
 
-    // Input buffer
-    char cmd[BUFFERSIZE];
+    // Command buffer holder
+    char cmdBuffer[BUFFERSIZE];
 
     // Read the command
-    std::cin.getline(cmd, BUFFERSIZE);
+    std::cin.getline(cmdBuffer, BUFFERSIZE);
 
     // Prepare the in/out containers
     std::vector<int*> pipes; 
 
     // Split by ;
     char* eachCmdPtr;
-    char* cmdCopy = strdup(cmd);
-    char* eachCmd = strtok_r(cmd, ";|", &eachCmdPtr);
+    char* cmdCopy = strdup(cmdBuffer);
+    char* eachCmd = strtok_r(cmdBuffer, ";|", &eachCmdPtr);
     int lastFd[2];
     bool wasPiped = false;
     bool isPiped = false;
     bool shouldWait = true;
     // Run each command
     while(eachCmd != NULL){
+        // Setup the container for the command 
+        command cmd;
+        cmd.fileIn[0] = '\0';
+        cmd.fileOut[0] = '\0';
+
         // Get the separator used
-        char sep = cmdCopy[eachCmd-cmd+strlen(eachCmd)];
+        char sep = cmdCopy[eachCmd-cmdBuffer+strlen(eachCmd)];
 
         util::strtrim(eachCmd);
 
@@ -102,36 +116,47 @@ void waitForInput(){
         // Split by space
         char* tmpPtr;
         char* progCpy = strdup(eachCmd);
+        // Split by <> as well to provide file input/output
         char* prog = strtok_r( eachCmd, " <>" , &tmpPtr);
         char* tmp = prog;
-        char* argSep;
+        char argSep=' ';
 
         // Iterate over the args and add them to args
         while ( tmp != NULL ){
-            args.push_back( tmp );
+            // if the last argument separator was not a space
+            // we are probably dealing with a file
+            if(argSep != ' '){
+                if(argSep == '>'){
+                    strcpy(cmd.fileOut, tmp);   
+                }else if(argSep == '<'){
+                    strcpy(cmd.fileIn, tmp);
+                }
+            }else{
+                args.push_back(tmp);
+            }
+
             // Check which separator triggered this
             int sepIndex = tmp - eachCmd + strlen(tmp);
-            char argSep = progCpy[tmp-eachCmd+strlen(tmp)];
-            // If it was not a space, we add the separator as an argument
-            // it will be parsed later
-            if(sepIndex < strlen(progCpy) && progCpy[sepIndex] != ' '){
-                char argSep[2];
-                argSep[0] = progCpy[sepIndex];
-                argSep[1] = '\0';
-                args.push_back(argSep);
-            }
+            argSep = progCpy[sepIndex];
+
             tmp = strtok_r( NULL, " " , &tmpPtr);
         }
 
         // Build argv
+        int argNum = 0;
         char** argv = new char*[args.size()+1];
         for ( int k = 0; k < args.size(); k++ ){
             argv[k] = args[k];
+            argNum++;
         }
+
+        cmd.exe = eachCmd;
+        cmd.args = argNum;
+        cmd.argv = argv;
 
         argv[args.size()] = NULL;
 
-        if(executeCmd(eachCmd, argv, fd, lastFd, wasPiped, isPiped, shouldWait) < 0){
+        if(executeCmd(cmd, fd, lastFd, wasPiped, isPiped, shouldWait) < 0){
             // Execution failed
             std::cout << "ash: failed to execute" << std::endl;
             perror("ash: failed to execute command");
@@ -145,22 +170,17 @@ void waitForInput(){
     }
 }
 
-int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPiped, bool isPiped, bool shouldWait){
-    // Number of args
-    int args = 0;
-    for(int i=0;argv[i];i++){
-        args++;
-    }
+int executeCmd(command cmd, int fd[2], int lastPipe[2], bool wasPiped, bool isPiped, bool shouldWait){
     // Check if its a builtin
-    if(builtins::fn cmdFn = isBuiltin(cmd)){
-        int res = (*cmdFn)(args, argv);
+    if(builtins::fn cmdFn = isBuiltin(cmd.exe)){
+        int res = (*cmdFn)(cmd.args, cmd.argv);
         if(res < 0){
             if(res == EXIT_CODE){
                 // If a builtin returns EXIT_CODE, exit
                 // this is used in the exit builtin for example
                 exit(EXIT_SUCCESS);
             }
-            std::cerr << "ash: command failed: " << cmd << std::endl;
+            std::cerr << "ash: command failed: " << cmd.exe << std::endl;
         }
         return res;
     }
@@ -189,20 +209,19 @@ int executeCmd(char cmd[], char **argv, int fd[2], int lastPipe[2], bool wasPipe
             dup2(lastPipe[INPUT], INPUT);
         }
 
-        // Check if the last argument is a file redirection command
-        if(args-1 > 0 && argv[args-2][0] == '>'){
-            const char* outFile = argv[args-1];
-            argv[args-1] = 0;
-            argv[args-2] = 0;
-            freopen(outFile,"w",stdout);
+        if(cmd.fileIn[0] != '\0'){
+            freopen(cmd.fileIn, "w", stdin);
+        }
+        if(cmd.fileOut[0] != '\0'){
+            freopen(cmd.fileOut, "w", stdout);
         }
 
         char *pathCmd;
-        if(isExecutable(cmd, &pathCmd) == EXIT_SUCCESS){
-            execv(pathCmd, argv);
+        if(isExecutable(cmd.exe, &pathCmd) == EXIT_SUCCESS){
+            execv(pathCmd, cmd.argv);
             exit(EXIT_SUCCESS);
         }else{
-            std::cerr << "ash: command not found: " << cmd << std::endl;
+            std::cerr << "ash: command not found: " << cmd.exe << std::endl;
             exit(-1);
         }
     }else{ // Parent
