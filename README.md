@@ -14,7 +14,7 @@ Pretty much everything is still waiting to be done, mainly:
 * More builtins (alias, declare, let, local, logout... )
 * File redirection
     * <del>output redirection</del> Redirecting output with > works.
-    * input redirection: reading a file into stdin
+    * <del>input redirection</del> reading a file into stdin
 * Variable expansion
 * Colors :)
 
