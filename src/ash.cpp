@@ -21,8 +21,9 @@ char PWD[FILENAME_MAX];
 const int BUFFERSIZE = 1024;// Read buffer size
 char *PATH;                 // PATH environmental variable
 char **PATHDIRS = NULL;     // Each path in the PATH var
-const int INPUT = 0;
-const int OUTPUT = 1;
+const int INPUT = 0;        // Reference to input handler
+const int OUTPUT = 1;       // Reference to output handler
+std::vector<char *> history;// Command history holder
 
 // Command structure
 struct command{
@@ -76,6 +77,8 @@ void waitForInput(){
 
     // Read the command
     std::cin.getline(cmdBuffer, BUFFERSIZE);
+
+    history.push_back(cmdBuffer);
 
     // Prepare the in/out containers
     std::vector<int*> pipes; 
