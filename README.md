@@ -12,7 +12,7 @@ Pretty much everything is still waiting to be done, mainly:
 * <del>Piping</del> You can now pipe commands!! :D
 * Signal handling (Only Ctrl+C (SIGINT) supported)
 * More builtins (alias, declare, let, local, logout... )
-* File redirection
+* <del>File redirection</del>
     * <del>output redirection</del> Redirecting output with > works.
     * <del>input redirection</del> reading a file into stdin
 * Variable expansion

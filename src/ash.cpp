@@ -8,6 +8,7 @@
 #include <cstdio>
 #include "builtins.h"
 #include "util.h"
+#include <pwd.h>
 #ifdef WINDOWS
 #include <direct.h>
 #define GetCurrentDir _getcwd
@@ -32,6 +33,8 @@ struct command{
     char fileIn[FILENAME_MAX];
 };
 
+void updatePasswd();
+void printPrompt();
 char* getWorkingDir();
 void updatePath();
 void signalHandler(int);
@@ -42,7 +45,6 @@ int executeCmd(command, int[], int[], bool, bool, bool);
 void waitForInput();
 
 int main(int argc, const char * argv[]) {
-
     std::cout << "Welcome to the ash shell!!\n";
     
     // Capture signals
@@ -67,7 +69,7 @@ char* getWorkingDir(){
 }
 
 void waitForInput(){
-    std::cout << getWorkingDir() << " $ ";
+    printPrompt();
 
     // Command buffer holder
     char cmdBuffer[BUFFERSIZE];
@@ -155,12 +157,10 @@ void waitForInput(){
         cmd.argv = argv;
 
         argv[args.size()] = NULL;
-
-        if(executeCmd(cmd, fd, lastFd, wasPiped, isPiped, shouldWait) < 0){
-            // Execution failed
-            std::cout << "ash: failed to execute" << std::endl;
-            perror("ash: failed to execute command");
-        }    
+        
+        // Execute command, errors should be displayed from inside
+        executeCmd(cmd, fd, lastFd, wasPiped, isPiped, shouldWait);
+        
         eachCmd = strtok_r(NULL, ";|", &eachCmdPtr);
 
         // Store the descriptors for the next iteration
@@ -180,7 +180,6 @@ int executeCmd(command cmd, int fd[2], int lastPipe[2], bool wasPiped, bool isPi
                 // this is used in the exit builtin for example
                 exit(EXIT_SUCCESS);
             }
-            std::cerr << "ash: command failed: " << cmd.exe << std::endl;
         }
         return res;
     }
@@ -312,6 +311,19 @@ void signalHandler(int signum){
         default:
             exit(signum);
     }
+}
+
+void printPrompt(){
+    std::string path(getWorkingDir());
+    
+    // Replace home dir with ~
+    passwd *pw = getpwuid(getuid());
+    const char *homedir = pw->pw_dir;
+    int loc = path.find(homedir);
+    if(loc >= 0){
+        path.replace(loc, strlen(homedir), "~");
+    }
+    std::cout << "\033[1;32m" << path << "\033[0m" << " $ ";
 }
 
 void updatePath(){
