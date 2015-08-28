@@ -78,6 +78,8 @@ void waitForInput(){
     // Read the command
     std::cin.getline(cmdBuffer, BUFFERSIZE);
 
+    // Trim input
+    util::strtrim(cmdBuffer);
     history.push_back(cmdBuffer);
 
     // Prepare the in/out containers
@@ -124,7 +126,20 @@ void waitForInput(){
         // Split by <> as well to provide file input/output
         char* prog = strtok_r( eachCmd, " <>" , &tmpPtr);
         char* tmp = prog;
-        char argSep=' ';
+        char argSep = ' ';
+        if(eachCmd[0] == '>' || eachCmd[0] == '<'){
+            argSep = eachCmd[0];
+            eachCmd[0] = ' ';
+            util::strtrim(eachCmd);
+            if(argSep == '>'){
+                strcpy(cmd.fileOut, eachCmd);
+            }else{
+                strcpy(cmd.fileIn, eachCmd);
+            }
+            tmp = strtok_r(NULL, " ", &tmpPtr);
+            args.push_back(tmp);
+            argSep = ' ';
+        }
 
         // Iterate over the args and add them to args
         while ( tmp != NULL ){
@@ -144,7 +159,7 @@ void waitForInput(){
             int sepIndex = tmp - eachCmd + strlen(tmp);
             argSep = progCpy[sepIndex];
 
-            tmp = strtok_r( NULL, " " , &tmpPtr);
+            tmp = strtok_r( NULL, " <>" , &tmpPtr);
         }
 
         // Build argv
@@ -158,6 +173,11 @@ void waitForInput(){
         cmd.exe = eachCmd;
         cmd.args = argNum;
         cmd.argv = argv;
+
+        std::cout << "cmd:" << cmd.exe<< std::endl;
+        std::cout << "args:"<<cmd.args  << std::endl;
+        std::cout << "filein:"<<cmd.fileIn << std::endl;
+        std::cout << "fileout:" << cmd.fileOut << std::endl; //*/
 
         argv[args.size()] = NULL;
         
