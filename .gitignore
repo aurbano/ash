@@ -5,6 +5,7 @@
 *.obj
 
 *.xcodeproj
+*.DSYM
 
 # Precompiled Headers
 *.gch
