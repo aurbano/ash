@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <map>
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -16,6 +17,8 @@
 #include <unistd.h>
 #define GetCurrentDir getcwd
 #endif
+
+typedef std::map<std::string, builtins::fn> builtin_fns;
 
 char PWD[FILENAME_MAX];
 const int BUFFERSIZE = 1024;// Read buffer size
@@ -249,13 +252,17 @@ int executeCmd(command cmd, int fd[2], int lastPipe[2], bool wasPiped, bool isPi
 }
 
 builtins::fn isBuiltin(char *cmd){
-    if(strcmp(cmd, "cd")==0){
-        return builtins::cd;
-    }else if(strcmp(cmd, "echo")==0){
-        return builtins::echo;
-    }else if(strcmp(cmd, "exit")==0){
-        return builtins::exit;
+    builtin_fns builtins;
+    builtins["cd"] = &builtins::cd;
+    builtins["echo"] = &builtins::echo;
+    builtins["exit"] = &builtins::exit;
+
+    builtin_fns::iterator it = builtins.find(cmd);
+
+    if (it != builtins.end()) {
+        return builtins[cmd];
     }
+
     return 0;
 }
 
